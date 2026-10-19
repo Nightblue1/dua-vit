@@ -3545,19 +3545,17 @@
           } else if (e.type === "burn") {
             heartBoom(e.cx, cy, h * 1.8, 10, h * 1.1);
             // the heart at the beam's tip shoves the duck back
-            d.el
-              .querySelector(".body")
-              .animate(
-                [
-                  { transform: "translateX(0)" },
-                  {
-                    transform: `translateX(${-h * 0.9}px) rotate(-25deg)`,
-                    offset: 0.3,
-                  },
-                  { transform: "translateX(0)" },
-                ],
-                { duration: 750, easing: "ease-out" },
-              );
+            d.el.querySelector(".body").animate(
+              [
+                { transform: "translateX(0)" },
+                {
+                  transform: `translateX(${-h * 0.9}px) rotate(-25deg)`,
+                  offset: 0.3,
+                },
+                { transform: "translateX(0)" },
+              ],
+              { duration: 750, easing: "ease-out" },
+            );
             const fire = document.createElement("span");
             fire.className = "fire";
             fire.innerHTML = "<span>💗</span><span>💖</span><span>💗</span>";
@@ -4612,7 +4610,6 @@
         window.addEventListener("resize", () => {
           if (!racing) applyLayout();
         });
-
         /* ---------- wiring ---------- */
         $("go").addEventListener("click", start);
         // decode the photos and draw the heart/flower sprites while the page is idle, not when they first show up
