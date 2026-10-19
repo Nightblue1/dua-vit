@@ -300,28 +300,43 @@
       #lanes {
         position: relative;
         height: var(--pond-h);
-        /* two drifting wave layers + soft light caustics */
-        background-image:
-          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='40'%3E%3Cpath d='M0 20 Q20 10 40 20 T80 20 T120 20 T160 20' fill='none' stroke='white' stroke-opacity='.28' stroke-width='2'/%3E%3C/svg%3E"),
-          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='70'%3E%3Cpath d='M0 50 Q27 40 55 50 T110 50 T165 50 T220 50' fill='none' stroke='white' stroke-opacity='.16' stroke-width='3'/%3E%3Ccircle cx='60' cy='18' r='2' fill='white' fill-opacity='.35'/%3E%3Ccircle cx='170' cy='30' r='1.5' fill='white' fill-opacity='.3'/%3E%3C/svg%3E");
-        background-size:
-          160px 40px,
-          220px 70px;
-        animation: drift 9s linear infinite;
+        isolation: isolate;
       }
-      .pond.racing #lanes {
+      /* two drifting wave layers + soft light caustics, each on its own layer and slid sideways with a transform
+         (cheap for the graphics card — animating background-position repainted the whole pond every frame) */
+      #lanes::before,
+      #lanes::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        z-index: -1;
+        pointer-events: none;
+        will-change: transform;
+        animation: drift1 9s linear infinite;
+      }
+      #lanes::before {
+        width: calc(100% + 160px);
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='40'%3E%3Cpath d='M0 20 Q20 10 40 20 T80 20 T120 20 T160 20' fill='none' stroke='white' stroke-opacity='.28' stroke-width='2'/%3E%3C/svg%3E") 0 0 / 160px 40px;
+      }
+      #lanes::after {
+        width: calc(100% + 440px);
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='70'%3E%3Cpath d='M0 50 Q27 40 55 50 T110 50 T165 50 T220 50' fill='none' stroke='white' stroke-opacity='.16' stroke-width='3'/%3E%3Ccircle cx='60' cy='18' r='2' fill='white' fill-opacity='.35'/%3E%3Ccircle cx='170' cy='30' r='1.5' fill='white' fill-opacity='.3'/%3E%3C/svg%3E") 0 0 / 220px 70px;
+        animation-name: drift2;
+      }
+      .pond.racing #lanes::before,
+      .pond.racing #lanes::after {
         animation-duration: 2.2s;
       }
-      @keyframes drift {
-        from {
-          background-position:
-            0 0,
-            0 0;
-        }
+      @keyframes drift1 {
         to {
-          background-position:
-            -160px 0,
-            -440px 0;
+          transform: translateX(-160px);
+        }
+      }
+      @keyframes drift2 {
+        to {
+          transform: translateX(-440px);
         }
       }
 
@@ -530,9 +545,9 @@
         height: 100%;
         object-fit: contain;
         transform-origin: 50% 100%;
-        filter: drop-shadow(0 0 2px #fff)
-          drop-shadow(0 0 8px rgba(124, 58, 237, 0.9))
+        filter: drop-shadow(0 0 8px rgba(124, 58, 237, 0.9))
           drop-shadow(0 6px 8px rgba(0, 0, 0, 0.4));
+        will-change: transform;
       }
       .fx.monster.shut img {
         animation: chew 0.22s ease-in-out infinite alternate;
@@ -597,9 +612,9 @@
         width: 100%;
         height: 100%;
         object-fit: contain;
-        filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 6px #a855f7)
-          drop-shadow(0 0 16px rgba(168, 85, 247, 0.9))
+        filter: drop-shadow(0 0 6px #a855f7)
           drop-shadow(0 10px 14px rgba(0, 0, 0, 0.45));
+        will-change: transform;
       }
       .boss-name {
         position: absolute;
@@ -652,13 +667,13 @@
         transform: scale(1);
       }
       .boss.casting img {
+        filter: drop-shadow(0 0 10px #db2777)
+          drop-shadow(0 10px 14px rgba(0, 0, 0, 0.45));
         animation: bossPulse 0.18s ease-in-out infinite alternate;
       }
       @keyframes bossPulse {
         to {
-          filter: drop-shadow(0 0 3px #fff) drop-shadow(0 0 10px #db2777)
-            drop-shadow(0 0 26px rgba(236, 72, 153, 0.95))
-            drop-shadow(0 10px 14px rgba(0, 0, 0, 0.45));
+          transform: scale(1.04);
         }
       }
       /* laser skill: glowing eyes, beams, burning ducks */
@@ -674,8 +689,8 @@
           circle,
           #fff 0,
           #fff 18%,
-          #ff3b3b 45%,
-          rgba(255, 0, 0, 0) 72%
+          #ff4da6 45%,
+          rgba(255, 45, 149, 0) 72%
         );
         transition:
           opacity 0.2s,
@@ -692,25 +707,75 @@
         }
       }
       .boss.lasering img {
-        animation: none;
-        filter: drop-shadow(0 0 3px #fff) drop-shadow(0 0 10px #e03131)
-          drop-shadow(0 0 26px rgba(255, 60, 30, 0.9))
+        filter: drop-shadow(0 0 12px #ff2d95)
           drop-shadow(0 10px 14px rgba(0, 0, 0, 0.45));
       }
+      /* love laser: pink beam with a heart riding at its tip */
       .fx.laser {
         z-index: 4700;
-        height: 6px;
-        margin-top: -3px;
-        border-radius: 3px;
+        height: 7px;
+        margin-top: -3.5px;
+        border-radius: 4px;
         transform-origin: 0 50%;
-        background: linear-gradient(90deg, #fff, #ff3030 25%, #ff7a00);
+        background: linear-gradient(90deg, #fff, #ff7ac0 25%, #ff2d95);
         box-shadow:
-          0 0 8px 3px rgba(255, 40, 40, 0.9),
-          0 0 22px 7px rgba(255, 120, 0, 0.55);
+          0 0 8px 3px rgba(255, 64, 160, 0.9),
+          0 0 22px 7px rgba(255, 150, 210, 0.6);
+      }
+      .fx.lasertip,
+      .fx.bigheart {
+        left: 0;
+        top: 0;
+        z-index: 4710;
+      }
+      .fx.lasertip svg,
+      .fx.bigheart svg {
+        filter: drop-shadow(0 0 8px #ff2d95);
+      }
+      /* falling heart bomb: blinks as it drops */
+      .fx.bomb svg {
+        filter: drop-shadow(0 0 6px #ff4d9d);
+        animation: heartBlink 0.22s steps(2) infinite;
+      }
+      @keyframes heartBlink {
+        50% {
+          opacity: 0.55;
+          transform: scale(1.18);
+        }
+      }
+      .fx.boom.love {
+        background: radial-gradient(
+          circle,
+          #fff 0,
+          #ffd6ea 20%,
+          #ff7ac0 45%,
+          rgba(255, 45, 149, 0.55) 60%,
+          transparent 70%
+        );
+      }
+      canvas.parts-fx {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 4720;
+        pointer-events: none;
+      }
+      .fx.heartp,
+      .fx.flowerp {
+        z-index: 4720;
+        line-height: 1;
+      }
+      .fx.flowerp {
+        z-index: 4365;
+      }
+      .fx.bang.love {
+        color: #ffd6ea;
+        -webkit-text-stroke-color: #c2255c;
       }
       .duck.burning .bob {
         animation: dizzy 0.9s linear infinite;
-        filter: sepia(1) saturate(5) hue-rotate(-25deg) brightness(0.55);
+        filter: sepia(0.6) saturate(3) hue-rotate(290deg) brightness(1.05);
       }
       .duck .fire {
         position: absolute;
@@ -805,7 +870,7 @@
         transform: skewX(-20deg);
       }
       .duck .ice::after {
-        content: "🤫";
+        content: "💖";
         position: absolute;
         right: -8px;
         top: -10px;
@@ -844,7 +909,7 @@
         background: var(--accent);
         color: var(--accent-ink);
         border-radius: 999px;
-        padding: 0 7px;
+        padding: 0 5px;
         line-height: 1.55;
       }
       @keyframes bob {
@@ -1466,6 +1531,7 @@
       .fx.spider {
         left: 0;
         top: 0;
+        will-change: transform;
         z-index: 4400;
         transform-origin: 50% 0;
         transition: opacity 0.4s;
@@ -1482,17 +1548,19 @@
         width: 100%;
         height: 100%;
         object-fit: contain;
-        filter: drop-shadow(0 0 2px #fff)
-          drop-shadow(0 0 8px rgba(255, 60, 60, 0.85))
+        filter: drop-shadow(0 0 8px rgba(255, 60, 60, 0.85))
           drop-shadow(0 8px 10px rgba(0, 0, 0, 0.4));
       }
       .fx.spider-line {
         z-index: 4390;
+        left: 0;
+        top: 0;
+        width: 1px;
         height: 2px;
         margin-top: -1px;
         transform-origin: 0 50%;
-        background: rgba(255, 255, 255, 0.9);
-        box-shadow: 0 0 4px #fff;
+        background: #fff;
+        will-change: transform;
       }
       .fx.webline {
         z-index: 4300;
@@ -1518,8 +1586,8 @@
         width: 2px;
         margin-left: -1px;
         transform-origin: 50% 0;
-        background: linear-gradient(#fff, rgba(255, 255, 255, 0.75));
-        box-shadow: 0 0 4px #fff;
+        background: linear-gradient(#ffd6ea, #ff7ac0);
+        box-shadow: 0 0 5px #ff4da6;
       }
       .duck .webwrap {
         position: absolute;
@@ -1572,8 +1640,7 @@
         height: 100%;
         object-fit: contain;
         transform-origin: 50% 90%;
-        filter: drop-shadow(0 0 8px rgba(255, 212, 59, 0.9)); /* one shadow only — it is shaken every frame */
-        will-change: transform;
+        will-change: transform; /* no filter: it is shaken every frame */
       }
       .fx.tien.laughing img {
         animation: tienShake 0.11s ease-in-out infinite alternate;
@@ -1937,7 +2004,7 @@
 
         // one shared pond: ducks overlap freely, each keeps its own row (y) and moves independently
         const START_L = 16,
-          FINISH_R = 64,
+          FINISH_R = 44,
           GRASS_H = 26,
           TIP_H = 20;
         const SPIDER_IMG =
@@ -2151,7 +2218,7 @@
    third of the field, at least two). It makes way for the bosses: a turn that would overlap a boss visit waits
    until the boss has gone. Booked after the bosses and before bombs and monsters. */
         const TIEN_FIRST = 20,
-          TIEN_EVERY = 10,
+          TIEN_EVERY = 15,
           TIEN_STAY = 1.3, // seconds it keeps laughing after the wave hits
           TIEN_MOUTH = [0.52, 0.52]; // the open mouth on the photo, as a share of its width/height
         let tienVisits = [];
@@ -2189,7 +2256,7 @@
             w = (h * TIEN_W) / TIEN_H,
             left = W - w - 4,
             top = GRASS_H + (H - GRASS_H) / 2 - h / 2;
-          const el = fx("tien", `<img src="${TIEN_IMG}" alt="Tiến Cười">`, `left:${left}px;top:${top}px;width:${w}px;height:${h}px`);
+          const el = fx("tien", `<img src="${imgUrl(TIEN_IMG)}" alt="Tiến Cười">`, `left:${left}px;top:${top}px;width:${w}px;height:${h}px`);
           el.animate([{ transform: "translateX(120%) rotate(12deg)" }, { transform: "translateX(-6%) rotate(-4deg)", offset: 0.75 }, { transform: "translateX(0) rotate(0)" }],
             { duration: 450, easing: "cubic-bezier(.2,.9,.3,1.2)", fill: "both" });
           v.el = el;
@@ -2213,7 +2280,7 @@
           }
           const W = lanesEl.clientWidth,
             H = lanesEl.clientHeight,
-            dpr = Math.min(1.5, window.devicePixelRatio || 1);
+            dpr = 0.5; // the rings are soft glows: half resolution looks the same and is a quarter of the pixels
           if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) {
             cv.width = Math.round(W * dpr);
             cv.height = Math.round(H * dpr);
@@ -2222,8 +2289,7 @@
           // far enough to reach the opposite corner of the pond
           const maxR = Math.hypot(Math.max(x, W - x), Math.max(y, H - y));
           const rings = [];
-          for (let burst = 0; burst < 2; burst++)
-            for (let i = 0; i < 7; i++) rings.push({ at: burst * 520 + i * 85, kind: RING_KINDS[i % 3] });
+          for (let i = 0; i < 4; i++) rings.push({ at: i * 140, kind: RING_KINDS[i % 3] });
           const DUR = 1150;
           let elapsed = 0,
             last = performance.now();
@@ -2249,9 +2315,6 @@
               ctx.globalAlpha = a;
               ctx.beginPath();
               ctx.arc(x, y, rad, 0, Math.PI * 2);
-              ctx.strokeStyle = r.kind.glow; // soft wide halo instead of an expensive blur
-              ctx.lineWidth = r.kind.w * 4;
-              ctx.stroke();
               ctx.strokeStyle = r.kind.line;
               ctx.lineWidth = r.kind.w;
               ctx.stroke();
@@ -2272,11 +2335,11 @@
           // glow pulsing at the mouth
           const p = fx("mouthpulse", "", at(90));
           p.animate([{ transform: "scale(.3)", opacity: 0 }, { transform: "scale(1.2)", opacity: 1 }, { transform: "scale(.6)", opacity: 0.6 }],
-            { duration: 280, iterations: 4, easing: "ease-in-out" }).onfinish = () => p.remove();
+            { duration: 280, iterations: 2, easing: "ease-in-out" }).onfinish = () => p.remove();
           // two bursts of rings, three kinds interleaved — drawn on one canvas inside the pond
           soundRings(v.mx, v.my);
           // sound arcs and laughing bits flying out to the left, fanned up and down
-          const bits = ["((", "(((", "HA", "HA!", "😆", "🎵", "HA", "((", "🎶", "HA!"];
+          const bits = ["((", "HA!", "😆", "🌹", "HA", "HA!"];
           bits.forEach((txt, i) => {
             const ang = Math.PI + (i / (bits.length - 1) - 0.5) * 1.6 + (Math.random() - 0.5) * 0.2,
               dist = W * (0.35 + Math.random() * 0.4),
@@ -2286,8 +2349,47 @@
               { transform: `translate(calc(-50% + ${Math.cos(ang) * dist}px),calc(-50% + ${Math.sin(ang) * dist}px)) scale(.9) rotate(${(Math.random() - 0.5) * 40}deg)`, opacity: 0 }],
               { duration: 1100 + Math.random() * 400, delay: i * 60, easing: "ease-out", fill: "both" }).onfinish = () => b.remove();
           });
+          // roses and flowers riding out on both bursts of the wave
+          for (let burst = 0; burst < 3; burst++)
+            for (let i = 0; i < 18; i++) {
+              const ang = Math.PI + (Math.random() - 0.5) * 2.6,
+                dist = W * (0.15 + Math.random() * 0.8),
+                cx = Math.cos(ang),
+                cy = Math.sin(ang);
+              particle(
+                pick(FLOWERS),
+                16 + Math.random() * 16,
+                [
+                  P(0, v.mx, v.my, 0.3, 0),
+                  P(0.2, v.mx + cx * dist * 0.3, v.my + cy * dist * 0.3, 1.2, 1),
+                  P(0.75, v.mx + cx * dist * 0.8, v.my + cy * dist * 0.8, 1, 1, rad((Math.random() - 0.5) * 220)),
+                  P(1, v.mx + cx * dist, v.my + cy * dist + 20, 0.8, 0, rad((Math.random() - 0.5) * 300)),
+                ],
+                1500 + Math.random() * 700,
+                burst * 420 + i * 22,
+              );
+            }
+          // roses drifting down all over the pond, swaying as they fall
+          const H = lanesEl.clientHeight;
+          for (let i = 0; i < 40; i++) {
+            const x = Math.random() * W,
+              sway = (Math.random() - 0.5) * 60,
+              fall = H * (0.55 + Math.random() * 0.5);
+            particle(
+              pick(FLOWERS),
+              14 + Math.random() * 14,
+              [
+                P(0, x, -20, 1, 0),
+                P(0.3, x + sway, -20 + fall * 0.35, 1, 1, rad(90 + Math.random() * 90)),
+                P(0.75, x - sway, -20 + fall * 0.75, 1, 1, rad(200 + Math.random() * 120)),
+                P(1, x, -20 + fall, 1, 0, rad(320 + Math.random() * 80)),
+              ],
+              2200 + Math.random() * 1200,
+              150 + Math.random() * 1300,
+              linear,
+            );
+          }
           popWord("HA HA HA!", "laugh", v.mx - 40, v.my - 60);
-          shake(pond, 900, 6, false);
           if (!results.length) $("status").textContent = "😆 Tiến Cười cười banh hồ!";
         }
         function tienLeave(v) {
@@ -2344,13 +2446,13 @@
           // flickering red flashes while the ground rumbles harder and harder
           w.animate(
             [
-              { filter: "brightness(1)" },
-              { filter: "brightness(1.8)" },
-              { filter: "brightness(.8)" },
-              { filter: "brightness(2)" },
-              { filter: "brightness(1)" },
+              { opacity: 1 },
+              { opacity: 0.7 },
+              { opacity: 1 },
+              { opacity: 0.6 },
+              { opacity: 1 },
             ],
-            { duration: 500, iterations: Math.ceil(BOSS_WARN * 2) },
+            { duration: 500, delay: 350, iterations: Math.ceil(BOSS_WARN * 2) },
           );
           shake(pond, BOSS_WARN * 1000, 9, true);
           v.warn = w;
@@ -2359,7 +2461,7 @@
         function bossDrop(v) {
           const look = BOSS_LOOKS[v.skill],
             H = lanesEl.clientHeight,
-            h = Math.min(H * 0.7, 280),
+            h = Math.min(H * 0.56, 224), // about 20% smaller than the original 0.7 / 280
             w = (h * look.w) / look.h;
           const eyes = look.eyes
             .map(
@@ -2369,7 +2471,7 @@
             .join("");
           const b = fx(
             "boss",
-            `<img src="${look.img()}" alt="Boss">${eyes}<span class="boss-name">${v.skill === "laser" ? "BOSS LAZE" : "BOSS CÂM LẶNG"}</span><span class="boss-say">${v.skill === "laser" ? "🔥 Laze!" : "🤫 Câm lặng!"}</span>`,
+            `<img src="${imgUrl(look.img())}" alt="Boss">${eyes}<span class="boss-name">${v.skill === "laser" ? "BOSS LAZE" : "BOSS CÂM LẶNG"}</span><span class="boss-say">${v.skill === "laser" ? "💘 Laze tình yêu!" : "💖 Câm lặng!"}</span>`,
             `width:${w}px;height:${h}px`,
           );
           // eye positions in pond coordinates once landed (the boss is centred horizontally, 8px from the top)
@@ -2427,7 +2529,7 @@
           if (!results.length)
             $("status").textContent =
               v.skill === "laser"
-                ? "🔥 Boss bắn Laze!"
+                ? "💘 Boss bắn Laze tình yêu!"
                 : "🤫 Boss dùng Câm lặng!";
         }
         function bossLeave(v) {
@@ -2704,13 +2806,13 @@
           return {
             t0,
             dir,
-            dur: 1.1 + Math.random() * 1.3, // seconds from one side to the other
-            reach: W / 2 + spider.sw * (0.75 + Math.random() * 0.9), // always far enough to leave the pond
+            dur: 3.8 + Math.random() * 1.4, // seconds from one side to the other
+            reach: W / 2 + spider.sw * (0.55 + Math.random() * 0.3), // just far enough to leave the pond
             low:
               GRASS_H +
               4 +
               Math.random() * Math.max(0, H * 0.45 - spider.sh * 0.4), // lowest point (top of the spider) mid-swing
-            rise: spider.sh * (0.6 + Math.random() * 1.2),
+            rise: spider.sh * (0.4 + Math.random() * 0.4),
           }; // how far it swings up at the sides
         }
         function updateSpider(t) {
@@ -2726,7 +2828,7 @@
             spider.line = fx("spider-line", "", "");
             spider.el = fx(
               "spider",
-              `<img src="${SPIDER_IMG}" alt="">`,
+              `<img src="${imgUrl(SPIDER_IMG)}" alt="">`,
               `width:${spider.sw}px;height:${spider.sh}px`,
             );
             spider.nextJunk = t + 0.4;
@@ -2742,13 +2844,13 @@
           spider.x = x;
           spider.y = y;
           spider.onScreen = x > -spider.sw * 0.3 && x < W + spider.sw * 0.3;
-          spider.el.style.transform = `translate(${x - spider.sw / 2}px,${y}px) rotate(${-s * 24}deg)`;
+          spider.el.style.transform = `translate(${(x - spider.sw / 2).toFixed(1)}px,${y.toFixed(1)}px) rotate(${(-s * 16).toFixed(2)}deg)`;
           // its thread runs up to a point high above the middle of the pond
           const ax = W / 2 + (x - W / 2) * 0.25,
             ay = -lanesEl.clientHeight;
           const la = (Math.atan2(y - ay, x - ax) * 180) / Math.PI,
             ll = Math.hypot(x - ax, y - ay);
-          spider.line.style.cssText = `left:${ax}px;top:${ay}px;width:${ll}px;transform:rotate(${la}deg)`;
+          spider.line.style.transform = `translate(${ax.toFixed(1)}px,${ay.toFixed(1)}px) rotate(${la.toFixed(2)}deg) scaleX(${ll.toFixed(1)})`;
           // it keeps out of sight while the boss is around
           const away = inBossShow(t, t);
           if (away !== spider.away) {
@@ -2757,7 +2859,8 @@
             spider.line.classList.toggle("away", away);
           }
           // webs sprayed everywhere for show, while it is in view
-          if (t >= spider.nextJunk && spider.onScreen && !away) {
+          const tienOn = tienVisits.some((v) => v.state === 1 || v.state === 2);
+          if (t >= spider.nextJunk && spider.onScreen && !away && !tienOn) {
             const hd = spiderHand(),
               H = lanesEl.clientHeight;
             webShot(
@@ -2768,7 +2871,7 @@
               380 + Math.random() * 200,
               true,
             );
-            spider.nextJunk = t + 0.35 + Math.random() * 0.5;
+            spider.nextJunk = t + 0.6 + Math.random() * 0.6;
           }
         }
         function spiderLeave() {
@@ -2806,57 +2909,192 @@
           };
         }
         // a web line shooting from (x1,y1) to (x2,y2) over ms; splat leaves a 🕸️ stuck there for a moment
+        const HEARTS = ["💖", "💗", "💕", "💘", "💓", "❤️"],
+          FLOWERS = ["🌹", "🌹", "🌹", "🌸", "🌺", "🌷", "🌹", "🌼"],
+          pick = (a) => a[Math.floor(Math.random() * a.length)];
+        const HEART_PATH =
+          "M16 29C6 21 0 15 0 8.5 0 3.8 3.8 0 8.5 0c3 0 5.6 1.6 7.5 4 1.9-2.4 4.5-4 7.5-4C28.2 0 32 3.8 32 8.5 32 15 26 21 16 29z";
+        const HEART_SVG = `<svg viewBox="-2 -2 36 34" aria-hidden="true"><path d="${HEART_PATH}" fill="#ff3d8b" stroke="#fff" stroke-width="2"/>
+<ellipse cx="9" cy="8" rx="4.2" ry="2.6" transform="rotate(-35 9 8)" fill="#fff" fill-opacity=".6"/></svg>`;
+        /* ---------- hearts & flowers ----------
+   Every little heart and flower is a particle painted on one canvas laid over the pond — hundreds of separate
+   animated emoji elements were what made the pond stutter. Each emoji is drawn once into a small sprite and then
+   just stamped (moved, turned, scaled, faded) every frame. A particle follows a few waypoints
+   {at, x, y, s(cale), o(pacity), r(otation, rad)} over `dur` ms after `delay`; the loop runs only while there is
+   something to draw and holds still while the race is paused for a reveal. */
+        const MAX_PARTS = 600;
+        const parts = { cv: null, ctx: null, list: [], on: false, last: 0, d: 1, size: "" };
+        const SPRITES = {};
+        function sprite(t) {
+          let c = SPRITES[t];
+          if (c) return c;
+          c = document.createElement("canvas");
+          c.width = c.height = 72;
+          const x = c.getContext("2d");
+          x.font = '56px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
+          x.textAlign = "center";
+          x.textBaseline = "middle";
+          x.fillText(t, 36, 40);
+          return (SPRITES[t] = c);
+        }
+        const easeOut = (k) => 1 - Math.pow(1 - k, 3),
+          easeInOut = (k) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2),
+          linear = (k) => k;
+        const P = (at, x, y, s, o, r = 0) => ({ at, x, y, s, o, r });
+        function particle(txt, size, pts, dur, delay = 0, ease = easeOut) {
+          if (parts.list.length >= MAX_PARTS) return;
+          if (!parts.cv || !parts.cv.isConnected) {
+            parts.cv = document.createElement("canvas");
+            parts.cv.className = "parts-fx";
+            lanesEl.appendChild(parts.cv);
+            parts.ctx = parts.cv.getContext("2d");
+            parts.list = [];
+            parts.size = "";
+          }
+          const W = lanesEl.clientWidth,
+            H = lanesEl.clientHeight,
+            key = W + "x" + H;
+          if (parts.size !== key) {
+            parts.size = key;
+            parts.d = Math.min(1.5, window.devicePixelRatio || 1);
+            parts.cv.width = Math.round(W * parts.d);
+            parts.cv.height = Math.round(H * parts.d);
+          }
+          parts.list.push({ img: sprite(txt), sz: (size * 72) / 56, pts, dur, t: -delay, ease });
+          if (!parts.on) {
+            parts.on = true;
+            parts.last = performance.now();
+            requestAnimationFrame(drawParts);
+          }
+        }
+        function drawParts(now) {
+          const c = parts.ctx,
+            d = parts.d,
+            dt = racePaused ? 0 : Math.min(400, Math.max(0, now - parts.last)); // real time, even if frames drop
+          parts.last = now;
+          if (!parts.cv.isConnected) {
+            parts.list = [];
+            parts.on = false;
+            return;
+          }
+          c.setTransform(1, 0, 0, 1, 0, 0);
+          c.clearRect(0, 0, parts.cv.width, parts.cv.height);
+          let w = 0;
+          for (const p of parts.list) {
+            p.t += dt;
+            if (p.t >= p.dur) continue;
+            parts.list[w++] = p;
+            if (p.t < 0) continue;
+            const k = p.ease(p.t / p.dur),
+              pts = p.pts;
+            let i = 1;
+            while (i < pts.length - 1 && k > pts[i].at) i++;
+            const a = pts[i - 1],
+              b = pts[i],
+              u = b.at > a.at ? Math.min(1, Math.max(0, (k - a.at) / (b.at - a.at))) : 1,
+              o = a.o + (b.o - a.o) * u,
+              s = a.s + (b.s - a.s) * u;
+            if (o <= 0.01 || s <= 0.01) continue;
+            const r = a.r + (b.r - a.r) * u,
+              cs = Math.cos(r) * s * d,
+              sn = Math.sin(r) * s * d;
+            c.globalAlpha = o;
+            c.setTransform(cs, sn, -sn, cs, (a.x + (b.x - a.x) * u) * d, (a.y + (b.y - a.y) * u) * d);
+            c.drawImage(p.img, -p.sz / 2, -p.sz / 2, p.sz, p.sz);
+          }
+          parts.list.length = w;
+          c.globalAlpha = 1;
+          if (w) requestAnimationFrame(drawParts);
+          else {
+            c.setTransform(1, 0, 0, 1, 0, 0);
+            c.clearRect(0, 0, parts.cv.width, parts.cv.height);
+            parts.on = false;
+          }
+        }
+        const rad = (deg) => (deg * Math.PI) / 180;
+        // a spray of emoji bits from (x,y) flying out every way, sagging a little as they fade
+        function burstBits(x, y, n, size, dist, bits, ms = 900, delay = 0) {
+          for (let i = 0; i < n; i++) {
+            const a = (Math.PI * 2 * i) / n + (Math.random() - 0.5) * 0.7,
+              r = dist * (0.5 + Math.random() * 0.7),
+              rot = rad((Math.random() - 0.5) * 60);
+            particle(
+              pick(bits),
+              size * (0.6 + Math.random() * 0.7),
+              [
+                P(0, x, y, 0.3, 1),
+                P(0.55, x + Math.cos(a) * r * 0.8, y + Math.sin(a) * r * 0.8, 1.15, 1, rot),
+                P(1, x + Math.cos(a) * r, y + Math.sin(a) * r + dist * 0.35, 0.8, 0, rot),
+              ],
+              ms * (0.8 + Math.random() * 0.5),
+              delay,
+            );
+          }
+        }
+        // little hearts fluttering every which way around (x,y) for about `ms`
+        function heartSwarm(x, y, ms, h) {
+          const n = Math.max(10, Math.min(24, Math.round(ms / 100)));
+          for (let i = 0; i < n; i++) {
+            const pts = [P(0, x, y, 0.2, 0)];
+            let px = 0,
+              py = 0;
+            for (let j = 1; j <= 4; j++) {
+              px = (Math.random() - 0.5) * h * 2.2;
+              py = (Math.random() - 0.5) * h * 1.6 - j * h * 0.12;
+              pts.push(P(j / 5, x + px, y + py, 1, 1, rad((Math.random() - 0.5) * 50)));
+            }
+            pts.push(P(1, x + px, y + py - h * 0.5, 0.5, 0));
+            particle(pick(HEARTS), h * (0.22 + Math.random() * 0.22), pts, 900 + Math.random() * 500, Math.random() * Math.max(0, ms - 1000), easeInOut);
+          }
+        }
+        // pink flash + a big burst of hearts
+        function heartBoom(x, y, s, n, dist) {
+          const f = fx("boom love", "", `left:${x - s / 2}px;top:${y - s / 2}px;width:${s}px;height:${s}px`);
+          f.animate([{ transform: "scale(.2)", opacity: 1 }, { transform: "scale(1.3)", opacity: 0 }], { duration: 650, easing: "ease-out" }).onfinish = () => f.remove();
+          burstBits(x, y, n, s * 0.16, dist, HEARTS, 1000);
+        }
+        // Vy Spider's shot: a trail of hearts growing bigger from the hand to the duck, each one popping in as the
+        // leading 💖 passes it, then the whole trail fades out. Show-off shots (splat) only get a short trail.
         function webShot(x1, y1, x2, y2, ms, splat) {
           const dx = x2 - x1,
             dy = y2 - y1,
             len = Math.hypot(dx, dy),
-            ang = (Math.atan2(dy, dx) * 180) / Math.PI,
-            tot = ms + 350;
-          const l = fx(
-            "webline",
-            "",
-            `left:${x1}px;top:${y1}px;width:${len}px;transform:rotate(${ang}deg) scaleX(0)`,
-          );
-          l.animate(
-            [
-              { transform: `rotate(${ang}deg) scaleX(0)`, opacity: 1 },
-              {
-                transform: `rotate(${ang}deg) scaleX(1)`,
-                opacity: 1,
-                offset: ms / tot,
-              },
-              { transform: `rotate(${ang}deg) scaleX(1)`, opacity: 0 },
-            ],
-            { duration: tot, easing: "ease-out", fill: "both" },
-          ).onfinish = () => l.remove();
-          const b = fx("webball", "🕸️", `left:${x1}px;top:${y1}px`);
-          b.animate(
-            [
-              { transform: "translate(-50%,-50%) scale(.4)" },
-              {
-                transform: `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(1)`,
-              },
-            ],
-            { duration: ms, easing: "ease-out", fill: "forwards" },
-          ).onfinish = () => {
-            if (!splat) {
-              b.remove();
-              return;
-            }
-            b.animate(
-              [
-                {
-                  transform: `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(1.5)`,
-                  opacity: 0.9,
-                },
-                {
-                  transform: `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(1.5)`,
-                  opacity: 0,
-                },
-              ],
-              { duration: 900, fill: "forwards" },
-            ).onfinish = () => b.remove();
-          };
+            n = splat ? 8 : Math.max(8, Math.min(20, Math.round(len / 18))),
+            tot = ms + 450;
+          for (let i = 1; i <= n; i++) {
+            const k = i / n,
+              x = x1 + dx * k,
+              y = y1 + dy * k,
+              at = (ms * Math.pow(k, 0.8)) / tot,
+              s = 8 + k * 18;
+            particle(HEARTS[i % HEARTS.length], s, [P(0, x, y, 0, 0), P(at, x, y, 0, 0), P(Math.min(0.99, at + 90 / tot), x, y, 1.3, 1), P(1, x, y - s * 0.1, 1, 0)], tot, 0, linear);
+          }
+          // the leading heart; a show-off shot leaves it glowing where it lands for a moment
+          const end = splat ? ms + 900 : ms,
+            hit = ms / end;
+          particle("💖", 22, splat ? [P(0, x1, y1, 0.4, 1), P(hit, x2, y2, 1.4, 1), P(1, x2, y2, 1.8, 0)] : [P(0, x1, y1, 0.4, 1), P(1, x2, y2, 1.4, 1)], end, 0, splat ? linear : easeOut);
+          burstBits(x2, y2, splat ? 5 : 12, 14, splat ? 26 : 40, HEARTS, 700, ms);
+        }
+        // the photos are huge data: URLs — turn each into a short blob: URL once and decode it ahead of time, so a
+        // character popping in doesn't stall the pond while its picture is parsed and decoded
+        const IMG_URLS = new Map();
+        function imgUrl(data) {
+          let u = IMG_URLS.get(data);
+          if (u) return u;
+          try {
+            const [head, b64] = data.split(","),
+              bin = atob(b64),
+              bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            u = URL.createObjectURL(new Blob([bytes], { type: head.slice(5).split(";")[0] }));
+          } catch (e) {
+            u = data;
+          }
+          IMG_URLS.set(data, u);
+          const im = new Image();
+          im.src = u;
+          if (im.decode) im.decode().catch(() => {});
+          return u;
         }
         function fx(cls, html, css) {
           const e = document.createElement("div");
@@ -2881,9 +3119,7 @@
             { duration: 1100, easing: "ease-out" },
           ).onfinish = () => w.remove();
         }
-        const BOMB_SVG = `<svg viewBox="0 0 40 46" aria-hidden="true"><path d="M24 11q4-8 10-6" stroke="#8a5a2b" stroke-width="2.5" fill="none"/>
-<circle cx="34" cy="5" r="4" fill="#ffd43b"/><circle cx="34" cy="5" r="2" fill="#ff6b00"/><rect x="15" y="10" width="10" height="7" rx="1.5" fill="#555"/>
-<circle cx="20" cy="29" r="15" fill="#222" stroke="#000" stroke-width="1.5"/><circle cx="14" cy="23" r="4" fill="#fff" fill-opacity=".35"/></svg>`;
+        const BOMB_SVG = HEART_SVG; // the bomb is a blinking heart now
         // spawn the obstacle a moment before it hits, aimed at where the duck will be
         function spawnObstacle(d, e, L) {
           const h = duckH(),
@@ -2948,6 +3184,20 @@
                     fill: "both",
                   },
                 ).onfinish = () => beam.remove();
+                // the heart at the tip, its point aimed along the beam
+                const T = h * 0.9,
+                  tip = fx("lasertip", HEART_SVG, `width:${T}px`),
+                  at = (x, y, sc) => `translate(${x - T / 2}px,${y - T / 2}px) rotate(${ang - 90}deg) scale(${sc})`;
+                tip.animate(
+                  [
+                    { transform: at(eye.x, eye.y, 0.3), opacity: 0 },
+                    { transform: at(eye.x + (cx - eye.x) * 0.06, eye.y + (ty - eye.y) * 0.06, 0.6), opacity: 1, offset: (fire * 0.06) / tot },
+                    { transform: at(cx, ty, 1.2), opacity: 1, offset: fire / tot },
+                    { transform: at(cx, ty, 1.5), opacity: 1, offset: (fire + 0.15) / tot },
+                    { transform: at(cx, ty, 1.9), opacity: 0 },
+                  ],
+                  { duration: tot * 1000, delay: charge * 1000, easing: "ease-in", fill: "both" },
+                ).onfinish = () => tip.remove();
               },
             );
           } else if (e.type === "freeze") {
@@ -2956,22 +3206,24 @@
               bx = v && v.bx != null ? v.bx : lanesEl.clientWidth / 2,
               by = v && v.by != null ? v.by : 40,
               ty = d.y + h * 0.5;
-            const p = fx("hush", "🤫", `left:0;top:0`),
+            const S = h * 1.5,
+              o = S / 2,
+              p = fx("bigheart", HEART_SVG, `width:${S}px`),
               mx = (bx + cx) / 2,
               my = Math.min(by, ty) - 60;
             p.animate(
               [
                 {
-                  transform: `translate(${bx - 12}px,${by - 12}px) scale(.4)`,
+                  transform: `translate(${bx - o}px,${by - o}px) scale(.3)`,
                   opacity: 0,
                 },
                 {
-                  transform: `translate(${mx - 12}px,${my - 12}px) scale(1.3) rotate(-20deg)`,
+                  transform: `translate(${mx - o}px,${my - o}px) scale(1.2) rotate(-20deg)`,
                   opacity: 1,
                   offset: 0.45,
                 },
                 {
-                  transform: `translate(${cx - 12}px,${ty - 12}px) scale(1) rotate(10deg)`,
+                  transform: `translate(${cx - o}px,${ty - o}px) scale(1) rotate(10deg)`,
                   opacity: 1,
                 },
               ],
@@ -2994,7 +3246,7 @@
               w = (mh * MONSTER_W) / MONSTER_H,
               m = fx(
                 "monster",
-                `<img src="${MONSTER_IMG}" alt="">`,
+                `<img src="${imgUrl(MONSTER_IMG)}" alt="">`,
                 `left:${cx - w / 2}px;top:${d.y + h * 1.05 - mh}px;width:${w}px;height:${mh}px`,
               );
             const tot = LEAD_M + e.stun;
@@ -3023,60 +3275,49 @@
           const h = duckH(),
             cy = d.y + h * 0.5;
           if (e.type === "bomb") {
-            const s = h * 2.4,
-              f = fx(
-                "boom",
-                "",
-                `left:${e.cx - s / 2}px;top:${cy - s / 2}px;width:${s}px;height:${s}px`,
-              );
-            f.animate(
-              [
-                { transform: "scale(.2)", opacity: 1 },
-                { transform: "scale(1.3)", opacity: 0 },
-              ],
-              { duration: 650, easing: "ease-out" },
-            ).onfinish = () => f.remove();
-            popWord("BÙM!", "", e.cx, d.y - h * 0.4);
+            heartBoom(e.cx, cy, h * 2.4, 12, h * 1.6);
+            popWord("BÙM! 💖", "love", e.cx, d.y - h * 0.4);
             d.el.classList.add("stunned");
           } else if (e.type === "burn") {
-            const s = h * 1.8,
-              f = fx(
-                "boom",
-                "",
-                `left:${e.cx - s / 2}px;top:${cy - s / 2}px;width:${s}px;height:${s}px`,
+            heartBoom(e.cx, cy, h * 1.8, 10, h * 1.1);
+            // the heart at the beam's tip shoves the duck back
+            d.el
+              .querySelector(".body")
+              .animate(
+                [
+                  { transform: "translateX(0)" },
+                  { transform: `translateX(${-h * 0.9}px) rotate(-25deg)`, offset: 0.3 },
+                  { transform: "translateX(0)" },
+                ],
+                { duration: 750, easing: "ease-out" },
               );
-            f.animate(
-              [
-                { transform: "scale(.2)", opacity: 1 },
-                { transform: "scale(1.2)", opacity: 0 },
-              ],
-              { duration: 450, easing: "ease-out" },
-            ).onfinish = () => f.remove();
             const fire = document.createElement("span");
             fire.className = "fire";
-            fire.innerHTML = "<span>🔥</span><span>🔥</span><span>🔥</span>";
+            fire.innerHTML = "<span>💗</span><span>💖</span><span>💗</span>";
             d.el.querySelector(".body").appendChild(fire);
-            popWord("CHÁY!", "burn", e.cx, d.y - h * 0.6);
+            popWord("TRÚNG TIM! 💘", "love", e.cx, d.y - h * 0.6);
             d.el.classList.add("burning");
           } else if (e.type === "freeze") {
+            heartBoom(e.cx, cy, h * 2.8, 16, h * 2);
             const ice = document.createElement("span");
             ice.className = "ice";
             d.el.querySelector(".body").appendChild(ice);
-            popWord("ĐÓNG BĂNG!", "freeze", e.cx, d.y - h * 0.6);
+            popWord("CÂM LẶNG! 💖", "freeze", e.cx, d.y - h * 0.6);
             d.el.classList.add("frozen");
           } else if (e.type === "laugh") {
             // blown back by the sound wave
             popWord("💨", "laugh-hit", e.cx + h * 0.4, d.y);
+            burstBits(e.cx, cy, 3, h * 0.45, h * 0.9, FLOWERS, 1000);
             d.el.classList.add("pushed");
           } else if (e.type === "spider") {
             // wrapped in web and hauled up on a thread (height and thread are driven each frame by lift())
             const web = document.createElement("span");
             web.className = "webwrap";
-            web.textContent = "🕸️";
+            web.textContent = "💞";
             d.el.querySelector(".body").appendChild(web);
             e.thread = fx("thread", "", "");
             d.el.style.zIndex = 2500; // dangling ducks pass in front of the rest
-            popWord("DÍNH TƠ! 🕸️", "web", e.cx, d.y - h * 0.6);
+            popWord("DÍNH TIM! 💞", "love", e.cx, d.y - h * 0.6);
             d.el.classList.add("webbed");
           } else {
             // Bảo Meo Meo swipes with its claws and grabs the duck
@@ -3097,21 +3338,22 @@
               { duration: 750, easing: "ease-out" },
             ).onfinish = () => cl.remove();
             popWord("VỒ! 🐾", "chomp", e.cx, d.y - h * 0.6);
+            heartSwarm(e.cx, cy, e.stun * 1000, h);
             d.el.classList.add("eaten");
           }
           if (!results.length)
             $("status").textContent =
               e.type === "bomb"
-                ? "💣 " + d.name + " trúng bom!"
+                ? "💖 " + d.name + " trúng bom tim!"
                 : e.type === "monster"
                   ? "🐾 Bảo Meo Meo vồ " + d.name + "!"
                   : e.type === "spider"
-                    ? "🕸️ Vy Spider kéo " + d.name + " lên trời!"
+                    ? "💞 Vy Spider kéo " + d.name + " lên trời!"
                     : e.type === "laugh"
                     ? "😆 Tiến Cười đẩy lùi " + (e.visit ? e.visit.targets.length + " con vịt" : d.name) + "!"
                     : e.type === "burn"
-                      ? "🔥 Boss đốt cháy " + d.name + "!"
-                      : "🤫 Boss Câm lặng " + d.name + "!";
+                      ? "💘 Boss bắn laze tình yêu vào " + d.name + "!"
+                      : "💖 Boss Câm lặng " + d.name + "!";
         }
         function endObstacle(d, e) {
           d.el.classList.remove(
@@ -3171,32 +3413,11 @@
             popWord("TÕM!", "web", x, d.y - h * 0.3);
           }
           if (e.type === "burn") {
-            // fire goes out in a few puffs of smoke
+            // the hearts float off
             const fire = d.el.querySelector(".fire");
             if (fire) fire.remove();
             const h = duckH();
-            for (let i = 0; i < 4; i++) {
-              const s = fx(
-                "smoke",
-                "",
-                `left:${e.cx - 7 + (Math.random() - 0.5) * h * 0.6}px;top:${d.y + h * 0.2}px`,
-              );
-              s.animate(
-                [
-                  { transform: "translateY(0) scale(.6)", opacity: 0.8 },
-                  {
-                    transform: `translateY(${-h * (0.8 + Math.random() * 0.6)}px) scale(${1.6 + Math.random()})`,
-                    opacity: 0,
-                  },
-                ],
-                {
-                  duration: 700 + i * 120,
-                  delay: i * 80,
-                  easing: "ease-out",
-                  fill: "both",
-                },
-              ).onfinish = () => s.remove();
-            }
+            burstBits(e.cx, d.y + h * 0.3, 7, h * 0.35, h * 0.8, HEARTS, 900);
           }
           if (e.type === "freeze") {
             // ice shatters into shards
@@ -3335,7 +3556,7 @@
               [
                 "claw",
                 "🐾 Vồ vịt bằng móng vuốt",
-                "Trồi lên từ mặt nước, vồ lấy con vịt rồi nhả nó văng ra phía sau.",
+                "Trồi lên từ mặt nước, vồ lấy con vịt giữa một đám tim bay lung tung rồi nhả nó văng ra phía sau.",
               ],
             ],
           },
@@ -3347,8 +3568,8 @@
             skills: [
               [
                 "web",
-                "🕸️ Bắn tùm lum",
-                "Đu qua đu lại khắp hồ, bắn tơ kéo vịt lên cao rồi thả cho rớt xuống, lùi về phía sau.",
+                "💞 Bắn tim tùm lum",
+                "Đu qua đu lại khắp hồ, bắn dải tim kéo vịt lên cao rồi thả cho rớt xuống, lùi về phía sau.",
               ],
             ],
           },
@@ -3361,7 +3582,7 @@
               [
                 "laugh",
                 "😆 Cười banh hồ",
-                "Cười cực lớn, sóng âm lan khắp hồ đẩy lùi cả đám vịt cùng lúc.",
+                "Cười cực lớn, sóng âm cuốn theo hoa hồng lan khắp hồ, đẩy lùi cả đám vịt cùng lúc.",
               ],
             ],
           },
@@ -3374,8 +3595,8 @@
             skills: [
               [
                 "freeze",
-                "🤫 Câm lặng",
-                "Giơ ngón tay suỵt, đóng băng ít nhất 2 con vịt, bắt chúng đứng yên một lúc.",
+                "💖 Câm lặng",
+                "Ném trái tim khổng lồ nổ tung vào ít nhất 2 con vịt, bắt chúng đứng yên một lúc.",
               ],
             ],
           },
@@ -3387,8 +3608,8 @@
             skills: [
               [
                 "laser",
-                "🔥 Laze",
-                "Bắn tia laze từ đôi mắt, đốt cháy ít nhất 2 con vịt.",
+                "💘 Laze tình yêu",
+                "Bắn laze hồng từ đôi mắt, đầu laze là trái tim đẩy lùi ít nhất 2 con vịt.",
               ],
             ],
           },
@@ -3428,7 +3649,7 @@
           el.setAttribute("aria-label", "Nhân vật mới: " + ch.name);
           el.style.setProperty("--rc1", ch.c1);
           el.style.setProperty("--rc2", ch.c2);
-          el.innerHTML = `<div class="slash"></div><div class="rv-inner"><img class="rv-img" src="${ch.img()}" alt="">
+          el.innerHTML = `<div class="slash"></div><div class="rv-inner"><img class="rv-img" src="${imgUrl(ch.img())}" alt="">
     <div class="rv-text"><span class="rv-tag">NHÂN VẬT MỚI</span><div class="rv-name"></div>
     ${ch.skills.map((s) => `<div class="rv-skill${s[0] === activeSkill ? " on" : ""}"><b>${s[1]}</b><span>${s[2]}</span></div>`).join("")}
     <div class="rv-hint">Bấm để tiếp tục</div></div></div>`;
@@ -4120,6 +4341,11 @@
 
         /* ---------- wiring ---------- */
         $("go").addEventListener("click", start);
+        // decode the photos and draw the heart/flower sprites while the page is idle, not when they first show up
+        setTimeout(() => {
+          [SPIDER_IMG, TIEN_IMG, MONSTER_IMG, BOSS_IMG, BOSS_FREEZE_IMG].forEach(imgUrl);
+          [...HEARTS, ...FLOWERS, "💞"].forEach(sprite);
+        }, 300);
         $("boss").addEventListener("change", () => {
           if (!racing) build();
         });
