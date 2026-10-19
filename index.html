@@ -236,6 +236,14 @@
         font-size: 18px;
         padding: 8px 22px;
       }
+      button.replay {
+        font-family: var(--display);
+        font-weight: 800;
+        font-size: 18px;
+        padding: 8px 18px;
+        border-color: var(--accent);
+        color: var(--ink);
+      }
       button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
@@ -1771,6 +1779,15 @@
                 <button
                   type="button"
                   class="icon-btn"
+                  id="soundBtn"
+                  aria-label="Tắt tiếng"
+                  aria-pressed="false"
+                >
+                  <span id="soundIcon" aria-hidden="true">🔊</span>
+                </button>
+                <button
+                  type="button"
+                  class="icon-btn"
                   id="fsBtn"
                   aria-label="Toàn màn hình"
                 >
@@ -1786,6 +1803,9 @@
                   <span id="fsLabel">Toàn màn hình</span>
                 </button>
                 <button type="button" class="go" id="go">Thả vịt!</button>
+                <button type="button" class="replay" id="replay">
+                  ↻ Chơi lại
+                </button>
               </div>
             </div>
             <div class="pond" id="pond">
@@ -2155,10 +2175,11 @@
                   ? LEAD_L
                   : LEAD_F;
         /* ---------- bosses ----------
-   Two bosses take turns, one per visit (a random one first): Boss Câm Lặng (a 🤫 thrown from its hand freezes
-   ducks) and Boss Laze (beams from its eyes set ducks on fire). The first visit starts at BOSS_START of the race
-   time, and each next one BOSS_GAP seconds after the previous boss has left — for as long as at least two ducks
-   are still swimming. A visit: the pond rumbles with a red warning (BOSS_WARN), the boss drops from the sky
+   Each race gets both bosses once, in a random order: Boss Câm Lặng (a big heart that blows up and freezes ducks)
+   and Boss Laze (pink love beams that knock ducks back). The first one shows up (its red warning starts) the
+   moment the leading duck reaches BOSS_FROM (60%) of the track; the second shows up at a random moment at least
+   BOSS_GAP seconds after the first showed up, never while the first is still around, and before the leader
+   reaches BOSS_BY (95%). A visit: the pond rumbles with a red warning (BOSS_WARN), the boss drops from the sky
    (BOSS_DROP), its skill takes LEAD_F to land, it lingers BOSS_STAY, then flies off. The lost time is added to
    the victims' finish times.
    The boss gets the stage to itself: visits (with two victims each) are booked before any bomb or monster, which
@@ -2168,8 +2189,9 @@
           BOSS_DROP = 0.55,
           BOSS_STAY = 0.9,
           BOSS_PRE = BOSS_WARN + BOSS_DROP + LEAD_F,
-          BOSS_START = 0.6, // share of the chosen race time when the first boss shows up
-          BOSS_GAP = 10; // seconds between one boss leaving and the next one's rumble
+          BOSS_FROM = 0.6, // the first boss shows up when the leader is this far along the track
+          BOSS_BY = 0.95, // ...and the second one before the leader gets this far
+          BOSS_GAP = 10; // at least this many seconds between the two bosses showing up
         // eyes on the boss photo, as a share of its width/height — where the lasers come from
         const BOSS_EYES = [
           [0.663, 0.485],
@@ -2193,39 +2215,69 @@
           },
         };
         let bossVisits = [];
-        function rollBoss(D) {
+        // the two visits for a race whose leader reaches BOSS_FROM at `from` and BOSS_BY at `by` (no victims yet)
+        function rollBoss(D, from, by) {
+          const stun = stunFreeze(D),
+            first = bossVisits.length ? bossVisits[0].skill : rnd() < 0.5 ? "laser" : "freeze",
+            // s = warning starts (the boss "shows up"), a = the boss itself arrives, th = its skill lands, e = it has flown off
+            visit = (skill, s) => {
+              const th = s + 0.3 + BOSS_PRE;
+              return { th, stun, skill, targets: [], state: 0, s, a: th - LEAD_F - BOSS_DROP - 0.2, e: th + BOSS_STAY + 0.6 };
+            },
+            v1 = visit(first, from),
+            // the second: BOSS_GAP after the first showed up (and after it has gone), at a random moment before `by`
+            lo = Math.max(from + BOSS_GAP, v1.e + 0.5),
+            hi = by - 0.3,
+            k = bossVisits.length > 1 ? bossVisits[1].k : rnd(); // keep the same random pick while it settles
+          const v2 = visit(first === "laser" ? "freeze" : "laser", lo < hi ? lo + k * (hi - lo) : lo);
+          v2.k = k;
+          return [v1, v2];
+        }
+        // Everything else is booked by now. Put the bosses where the real leader reaches BOSS_FROM / BOSS_BY, and
+        // clear out whatever would share the pond with them (a bomb, monster or Tiến Cười turn). Taking hits away
+        // only makes the leader faster, so the bosses then move a little earlier — repeat until it settles, then
+        // book two victims per visit.
+        function placeBosses(D) {
           bossVisits = [];
           if (!$("boss").checked) return;
-          const stun = stunFreeze(D);
-          // the two bosses take turns, a random one first
-          const first = rnd() < 0.5 ? "laser" : "freeze",
-            second = first === "laser" ? "freeze" : "laser";
-          // s = first rumble, a = the boss itself arrives, th = its skill lands, e = it has flown off
-          for (let s = BOSS_START * D; bossVisits.length < 50; ) {
-            const th = s + 0.3 + BOSS_PRE;
-            const v = {
-              th,
-              stun,
-              skill: bossVisits.length % 2 === 0 ? first : second,
-              targets: [],
-              state: 0,
-              s,
-              a: th - LEAD_F - BOSS_DROP - 0.2,
-              e: th + BOSS_STAY + 0.6,
-            };
-            // two victims booked up front, so the visit always has someone to strike; when fewer than two
-            // ducks would still be swimming by then, the bosses are done for this race
-            const cands = ducks.filter((d) =>
-              duckFree(d, th, LEAD_F, stun, 0.97),
-            );
-            if (cands.length < 2) break;
-            for (let k = 2; k > 0; k--)
-              addBossHit(
-                v,
-                cands.splice(Math.floor(rnd() * cands.length), 1)[0],
-              );
-            bossVisits.push(v);
-            s = v.e + BOSS_GAP;
+          for (let pass = 0; pass < 20; pass++) {
+            const by = realLeaderTime(BOSS_BY),
+              // normally right at 60%; only if the leader gets from 60% to 95% in under BOSS_GAP seconds does the
+              // first boss come a little earlier, so the second can still keep its distance and be in time
+              from = Math.min(realLeaderTime(BOSS_FROM), by - BOSS_GAP - 0.4);
+            // settled: the first is right at 60% and the second still shows up before 95%
+            if (bossVisits.length && Math.abs(bossVisits[0].s - from) < 0.06 && bossVisits[1].s < by - 0.1) break;
+            bossVisits = rollBoss(D, from, by);
+            // Tiến Cười turns overlapping a visit (rumble included) are called off
+            const gone = tienVisits.filter((t) => bossVisits.some((v) => t.s < v.e && v.s < t.e));
+            tienVisits = tienVisits.filter((t) => !gone.includes(t));
+            for (const d of ducks) {
+              d.evs = d.evs.filter((e) => {
+                if (e.type === "laugh") return !gone.includes(e.visit);
+                const lead = leadOf(e);
+                // the same rules the booking follows: nothing on the pond with a boss, nothing new during a rumble
+                if (inBossShow(e.th - lead, e.th + e.stun)) return false;
+                if (e.type !== "spider" && inBossTime(e.th - lead, e.th - lead)) return false;
+                return true;
+              });
+              finalizeEvents(d);
+            }
+          }
+          // two victims per visit; if fewer than two are free, make room on the ducks furthest behind
+          for (const v of bossVisits) {
+            let cands = ducks.filter((d) => duckFree(d, v.th, LEAD_F, v.stun, 0.97));
+            if (cands.length < 2) {
+              const extra = ducks
+                .filter((d) => !cands.includes(d) && v.th < d.T)
+                .sort((a, b) => pos(a, v.th) - pos(b, v.th))
+                .slice(0, 2 - cands.length);
+              for (const d of extra) {
+                d.evs = d.evs.filter((o) => !(v.th - LEAD_F < o.th + o.stun + 0.4 && o.th - leadOf(o) < v.th + v.stun + 0.4));
+                finalizeEvents(d);
+              }
+              cands = cands.concat(extra);
+            }
+            for (let k = 2; k > 0 && cands.length; k--) addBossHit(v, cands.splice(Math.floor(rnd() * cands.length), 1)[0]);
           }
         }
         function addBossHit(v, d) {
@@ -2395,6 +2447,7 @@
         function tienLaugh(v) {
           if (!v.el) return;
           v.el.classList.add("laughing");
+          Sound.play("tienLaugh");
           const W = lanesEl.clientWidth,
             at = (s) =>
               `left:${v.mx - s / 2}px;top:${v.my - s / 2}px;width:${s}px;height:${s}px`;
@@ -2536,6 +2589,12 @@
         }
         // when the fastest duck would reach share p of the track if nothing hit it. Hits only ever hold a duck back,
         // so no duck can get there sooner — the race's "x% of the way" moments are measured with this.
+        // when the real leader (hits included, so after finalizeEvents) first gets p of the way
+        function realLeaderTime(p) {
+          const end = Math.max(...ducks.map((d) => d.T));
+          for (let t = 0; t < end; t += 0.05) if (ducks.some((d) => pos(d, Math.min(t, d.T)) >= p)) return t;
+          return end;
+        }
         function leaderTime(p) {
           return Math.min(
             ...ducks.map((d) => {
@@ -2590,10 +2649,16 @@
             { duration: 500, delay: 350, iterations: Math.ceil(BOSS_WARN * 2) },
           );
           shake(pond, BOSS_WARN * 1000, 9, true);
+          v.warnSnd = Sound.play("bossWarn");
           v.warn = w;
           if (!results.length) $("status").textContent = "⚠ Boss đang tới…";
         }
         function bossDrop(v) {
+          // the warning siren dies down as the boss lands
+          if (v.warnSnd) {
+            Sound.fadeOut(v.warnSnd, BOSS_DROP * 1000 + 300);
+            v.warnSnd = null;
+          }
           const look = BOSS_LOOKS[v.skill],
             H = lanesEl.clientHeight,
             h = Math.min(H * 0.56, 224), // about 20% smaller than the original 0.7 / 280
@@ -2606,7 +2671,7 @@
             .join("");
           const b = fx(
             "boss",
-            `<img src="${imgUrl(look.img())}" alt="Boss">${eyes}<span class="boss-name">${v.skill === "laser" ? "BOSS LAZE" : "BOSS CÂM LẶNG"}</span><span class="boss-say">${v.skill === "laser" ? "💘 Laze tình yêu!" : "💖 Câm lặng!"}</span>`,
+            `<img src="${imgUrl(look.img())}" alt="Boss">${eyes}<span class="boss-name">${v.skill === "laser" ? "BOSS LAZE" : "BOSS CÂM LẶNG"}</span><span class="boss-say">${v.skill === "laser" ? "💘 Laze tình yêu!" : "💖 Nụ Hôn Câm lặng!"}</span>`,
             `width:${w}px;height:${h}px`,
           );
           // eye positions in pond coordinates once landed (the boss is centred horizontally, 8px from the top)
@@ -2668,6 +2733,10 @@
                 : "🤫 Boss dùng Câm lặng!";
         }
         function bossLeave(v) {
+          if (v.snd) {
+            Sound.fadeOut(v.snd, 500);
+            v.snd = null;
+          }
           const b = v.el,
             w = v.warn;
           if (b) {
@@ -2695,7 +2764,7 @@
             }).onfinish = () => w.remove();
         }
         // second of the race from which each kind may first show up
-        const START_AT = { bomb: 5, monster: 5, spider: 30 };
+        const START_AT = { bomb: 6, monster: 6, spider: 30 };
         const MAX_SAME = 3; // at most this many of one kind (bombs, Bảo Meo Meo, Vy Spider) on the pond at the same moment
         const stunHit = (D) => Math.min(3, Math.max(1.2, D * 0.07)),
           stunFreeze = (D) => Math.min(4, Math.max(1.6, D * 0.1)),
@@ -2717,7 +2786,7 @@
           );
           return (th - before) / d.T0 <= maxU;
         }
-        // Every race has all three: bombs and Bảo Meo Meo from START_AT 5s, Vy Spider from 30s, all striking before dl
+        // Every race has all three: bombs and Bảo Meo Meo from START_AT 6s (the first of each shows up right then), Vy Spider from 30s, all striking before dl
         // (the leader can't have reached 95% yet). At least two of each, then a random number more, in waves:
         // about half join an earlier moment so several strike together — capped at MAX_SAME per kind at once,
         // and never while a boss is on screen. Ducks nothing has hit yet are picked first, and once the random
@@ -2817,6 +2886,11 @@
               if (!span) t += 0.1; // nobody free right now: leave the shortest possible gap
             }
           };
+          // the first bomb and the first Bảo Meo Meo show up right at START_AT (6s), not at some random later moment
+          ["bomb", "monster"].forEach((type) => {
+            if (kinds.includes(type))
+              tryAt(type, START_AT[type] + leadOf({ type }) + 1e-6, false);
+          });
           // the guaranteed two of each kind first, with plenty of attempts — Vy Spider before the others,
           // since it has the shortest stretch of the race to work with
           kinds
@@ -2983,6 +3057,12 @@
           let sw = spider.swing;
           while (t >= sw.t0 + sw.dur)
             sw = spider.swing = newSwing(sw.t0 + sw.dur, -sw.dir);
+          // a "whoosh" for every swing across; a swing that starts while it hides from a boss gets its sound once
+          // it is back in view
+          if (sw !== spider.heard && !inBossShow(t, t + 0.5)) {
+            spider.heard = sw;
+            Sound.play("vySwing");
+          }
           // s runs -1 → 1 (or 1 → -1) over the swing, fastest in the middle like a pendulum
           const s = -Math.cos((Math.PI * (t - sw.t0)) / sw.dur) * sw.dir;
           const x = W / 2 + sw.reach * s,
@@ -3262,6 +3342,7 @@
         // Vy Spider's shot: a trail of hearts growing bigger from the hand to the duck, each one popping in as the
         // leading 💖 passes it, then the whole trail fades out. Show-off shots (splat) only get a short trail.
         function webShot(x1, y1, x2, y2, ms, splat) {
+          Sound.play("vyShot", { vol: splat ? 0.5 : 1 });
           const dx = x2 - x1,
             dy = y2 - y1,
             len = Math.hypot(dx, dy),
@@ -3315,6 +3396,141 @@
             ms,
           );
         }
+        /* ---------- sounds ----------
+   Sound files live in the sounds/ folder next to this page. Each slot below names its file; a file that isn't
+   there simply stays silent. Effects are throttled per slot (`gap` ms) so a dozen ducks hit at once don't
+   turn into noise. Everything pauses with the race during a reveal, and the 🔊 button mutes it all. */
+        const SOUND_FILES = {
+          music: { file: "bat_dau.mp3", vol: 0.4, loop: true }, // starts as soon as "Thả vịt!" is pressed
+          countdown: { file: "dem_nguoc.mp3", vol: 0.8 },
+          go: { file: "dua.mp3", vol: 0.9 },
+          bombFall: { file: "bom.mp3", vol: 0.8, gap: 300 }, // one file for the drop and the blast: starts as the bomb falls
+          bombBoom: { file: "bom_no.mp3", vol: 0.7, gap: 200 },
+          meow: { file: "bao_meo_meo.mp3", vol: 0.8, gap: 600 }, // each time Bảo Meo Meo rises out of the water
+          reveal: { file: "xuat_hien.mp3", vol: 0.9 }, // a character's introduction card
+          vyShot: { file: "vy_ban.mp3", vol: 0.5, gap: 250 },
+          vySwing: { file: "vy_spider.mp3", vol: 0.8, gap: 1500 }, // each time Vy Spider swings across the pond
+          tienLaugh: { file: "tien_cuoi.mp3", vol: 0.9 },
+          bossWarn: { file: "warning.mp3", vol: 0.8 },
+          laser: { file: "boss_laze.mp3", vol: 0.9, gap: 600 },
+          heartBoom: { file: "boss_cam_lang.mp3", vol: 0.8, gap: 300 },
+          first: { file: "ve_nhat.mp3", vol: 0.9 },
+          end: { file: "ket_thuc.mp3", vol: 0.9 },
+          // the result popup plays all three at once, each on a loop, until it is closed (2 and 3 a bit louder)
+          congrats1: { file: "chuc_mung_1.mp3", vol: 0.65 },
+          congrats2: { file: "chuc_mung_2.mp3", vol: 1 },
+          congrats3: { file: "chuc_mung_3.mp3", vol: 1 },
+        };
+        const Sound = (() => {
+          const base = {}, // slot -> preloaded <audio>, or null once the file turned out missing
+            lastAt = {},
+            playing = new Set();
+          let muted = false,
+            music = null;
+          try {
+            muted = localStorage.getItem("duavit-muted") === "1";
+          } catch (e) {}
+          function load(key) {
+            if (key in base) return base[key];
+            const def = SOUND_FILES[key],
+              a = new Audio("sounds/" + def.file);
+            a.preload = "auto";
+            a.addEventListener("error", () => (base[key] = null), {
+              once: true,
+            });
+            return (base[key] = a);
+          }
+          // a fresh copy each time, so the same effect can overlap itself
+          function play(key, { delay = 0, vol = 1, ui = false } = {}) {
+            const def = SOUND_FILES[key],
+              src = load(key);
+            if (!def || !src || muted) return null;
+            const now = performance.now();
+            if (def.gap && now - (lastAt[key] || -1e9) < def.gap) return null;
+            lastAt[key] = now;
+            const a = src.cloneNode();
+            a.volume = Math.min(1, def.vol * vol);
+            const go = () => {
+              if (muted || (racePaused && !ui)) return;
+              if (ui) return void a.play().catch(() => {});
+              playing.add(a);
+              a.addEventListener("ended", () => playing.delete(a), {
+                once: true,
+              });
+              a.play().catch(() => playing.delete(a));
+            };
+            delay ? setTimeout(go, delay) : go();
+            return a;
+          }
+          // fade one sound out over `ms`, then stop it
+          function fadeOut(a, ms = 400) {
+            if (!a) return;
+            const v0 = a.volume,
+              t0 = performance.now(),
+              stop = () => {
+                a.pause();
+                playing.delete(a);
+              };
+            (function step(now) {
+              const k = Math.min(1, Math.max(0, (now - t0) / ms));
+              a.volume = v0 * (1 - k);
+              if (k < 1) requestAnimationFrame(step);
+              else stop();
+            })(t0);
+            setTimeout(stop, ms + 50); // frames stop in a hidden tab: make sure it ends anyway
+          }
+          function startMusic() {
+            stopMusic();
+            const src = load("music");
+            if (!src || muted) return;
+            music = src.cloneNode();
+            music.loop = true;
+            music.volume = SOUND_FILES.music.vol;
+            music.play().catch(() => {});
+          }
+          function stopMusic() {
+            if (music) fadeOut(music, 600);
+            music = null;
+          }
+          function pauseAll() {
+            if (music) music.pause();
+            playing.forEach((a) => a.pause());
+          }
+          function resumeAll() {
+            if (muted) return;
+            if (music) music.play().catch(() => {});
+            playing.forEach((a) => a.play().catch(() => {}));
+          }
+          function setMuted(m) {
+            muted = m;
+            try {
+              localStorage.setItem("duavit-muted", m ? "1" : "0");
+            } catch (e) {}
+            if (m) {
+              if (music) music.pause();
+              playing.forEach((a) => a.pause());
+              playing.clear();
+            } else if (music && racing) music.play().catch(() => {});
+          }
+          // start fetching every file once the page is idle, so the first play isn't late
+          setTimeout(() => Object.keys(SOUND_FILES).forEach(load), 500);
+          function stopAll() {
+            stopMusic();
+            playing.forEach((a) => a.pause());
+            playing.clear();
+          }
+          return {
+            play,
+            fadeOut,
+            startMusic,
+            stopMusic,
+            stopAll,
+            pauseAll,
+            resumeAll,
+            setMuted,
+            isMuted: () => muted,
+          };
+        })();
         // the photos are huge data: URLs — turn each into a short blob: URL once and decode it ahead of time, so a
         // character popping in doesn't stall the pond while its picture is parsed and decoded
         const IMG_URLS = new Map();
@@ -3367,6 +3583,7 @@
           const h = duckH(),
             cx = START_L + e.ph * L + ((h * 64) / 48) * 0.5;
           if (e.type === "bomb") {
+            Sound.play("bombFall");
             const s = h * 0.75,
               b = fx(
                 "bomb",
@@ -3392,6 +3609,8 @@
               ty = d.y + h * 0.5,
               charge = LEAD_F * 0.55,
               fire = LEAD_F - charge;
+            const zap = Sound.play("laser", { delay: charge * 1000 });
+            if (zap && v) v.snd = zap;
             ((v && v.eyes) || [{ x: lanesEl.clientWidth / 2, y: 60 }]).forEach(
               (eye) => {
                 const dx = cx - eye.x,
@@ -3506,6 +3725,7 @@
             webShot(hand.x, hand.y, cx, ty, LEAD_S * 1000, false);
           } else {
             // monster photo rises out of the water right under the duck (about 1.35 duck-heights tall)
+            Sound.play("meow");
             const mh = h * 1.35,
               w = (mh * MONSTER_W) / MONSTER_H,
               m = fx(
@@ -3540,6 +3760,7 @@
             cy = d.y + h * 0.5;
           if (e.type === "bomb") {
             heartBoom(e.cx, cy, h * 2.4, 12, h * 1.6);
+            Sound.play("bombBoom");
             popWord("BÙM! 💖", "love", e.cx, d.y - h * 0.4);
             d.el.classList.add("stunned");
           } else if (e.type === "burn") {
@@ -3564,6 +3785,9 @@
             d.el.classList.add("burning");
           } else if (e.type === "freeze") {
             heartBoom(e.cx, cy, h * 2.8, 16, h * 2);
+            // boss_cam_lang.mp3 plays while the ducks are frozen (once per visit), fading as the ice breaks
+            const hush = Sound.play("heartBoom");
+            if (hush && e.visit) e.visit.hushSnd = hush;
             const ice = document.createElement("span");
             ice.className = "ice";
             d.el.querySelector(".body").appendChild(ice);
@@ -3689,6 +3913,10 @@
             burstBits(e.cx, d.y + h * 0.3, 7, h * 0.35, h * 0.8, HEARTS, 900);
           }
           if (e.type === "freeze") {
+            if (e.visit && e.visit.hushSnd) {
+              Sound.fadeOut(e.visit.hushSnd, 500);
+              e.visit.hushSnd = null;
+            }
             // ice shatters into shards
             const ice = d.el.querySelector(".ice");
             if (ice) ice.remove();
@@ -3778,10 +4006,9 @@
           ducks.forEach((d) => {
             d.evs = [];
           });
-          rollBoss(D);
+          bossVisits = [];
           rollTien(D);
           const obstacles = rollObstacles(D, dl, t50, tEnd);
-          bossSweep(); // the bosses take care of any duck still untouched
           ducks.forEach(finalizeEvents);
           // monsters keep coming until 90% of the ducks are home — that moment depends on the hits themselves,
           // so extend, work the finish times out again, and repeat until it settles
@@ -3793,6 +4020,10 @@
               if (!obstacles.extend(mark)) break;
               ducks.forEach(finalizeEvents);
             }
+          // the bosses go where the real leader — every hit counted — reaches 60%, see placeBosses()
+          placeBosses(D);
+          bossSweep(); // the bosses take care of any duck still untouched
+          ducks.forEach(finalizeEvents);
           const c = $("count");
           let n = 3;
           const show = (v) => {
@@ -3802,17 +4033,23 @@
             c.hidden = false;
           };
           show(n);
+          Sound.startMusic();
+          Sound.play("countdown");
           $("status").textContent = "Chuẩn bị…";
-          const iv = setInterval(() => {
+          clearInterval(countIv);
+          const iv = (countIv = setInterval(() => {
             n--;
-            if (n > 0) show(n);
-            else {
+            if (n > 0) {
+              show(n);
+              Sound.play("countdown");
+            } else {
               clearInterval(iv);
               show("Đua!");
+              Sound.play("go");
               setTimeout(() => (c.hidden = true), 700);
               run();
             }
-          }, 800);
+          }, 800));
         }
 
         /* ---------- character reveal ----------
@@ -3898,6 +4135,7 @@
             .getAnimations()
             .filter((a) => a.playState === "running");
           heldAnims.forEach((a) => a.pause());
+          Sound.pauseAll();
         }
         function resumeRace() {
           racePausedMs += performance.now() - pauseAt;
@@ -3908,8 +4146,10 @@
           });
           heldAnims = [];
           racePaused = false;
+          Sound.resumeAll();
         }
         // shows the reveal for `key` once per page load; returns true when it did (the race is then paused)
+        const REVEAL_MS = 3000;
         function revealOnce(key, activeSkill) {
           if (revealed[key]) return false;
           revealed[key] = true;
@@ -3924,35 +4164,27 @@
           el.innerHTML = `<div class="slash"></div><div class="rv-inner"><img class="rv-img" src="${imgUrl(ch.img())}" alt="">
     <div class="rv-text"><span class="rv-tag">NHÂN VẬT MỚI</span><div class="rv-name"></div>
     ${ch.skills.map((s) => `<div class="rv-skill${s[0] === activeSkill ? " on" : ""}"><b>${s[1]}</b><span>${s[2]}</span></div>`).join("")}
-    <div class="rv-hint">Bấm để tiếp tục</div></div></div>`;
+    </div></div>`;
           el.querySelector(".rv-name").textContent = ch.name;
           app.appendChild(el);
+          Sound.play("reveal", { ui: true });
           shake(el.querySelector(".rv-inner"), 500, 10, false);
-          let done = false;
-          const close = () => {
-            if (done) return;
-            done = true;
-            clearTimeout(timer);
-            document.removeEventListener("keydown", onKey);
+          // it stays exactly REVEAL_MS, whatever is clicked or pressed meanwhile
+          const id = raceId;
+          setTimeout(() => {
             el.classList.add("out");
             setTimeout(() => {
               el.remove();
-              resumeRace();
+              if (id === raceId) resumeRace(); // a replay has already reset the race
             }, 280);
-          };
-          const onKey = (ev) => {
-            if (ev.key === "Enter" || ev.key === "Escape" || ev.key === " ") {
-              ev.preventDefault();
-              close();
-            }
-          };
-          const timer = setTimeout(close, 3000);
-          el.addEventListener("click", close);
-          document.addEventListener("keydown", onKey);
+          }, REVEAL_MS);
           return true;
         }
 
+        let raceId = 0,
+          countIv = null;
         function run() {
+          const id = raceId;
           pond.classList.add("racing");
           $("status").textContent = "Đang đua…";
           const t0 = performance.now(),
@@ -3960,6 +4192,7 @@
           racePausedMs = 0;
           setupSpider(+$("dur").value);
           function frame(now) {
+            if (id !== raceId) return; // replayed: this race is over
             if (racePaused) {
               requestAnimationFrame(frame);
               return;
@@ -4102,6 +4335,7 @@
                 d.el.appendChild(b);
                 if (results.length === 1) {
                   $("status").textContent = "🏁 " + d.name + " về nhất!";
+                  Sound.play("first");
                   // the winner gets a crown right there in the pond
                   d.el.classList.add("winner");
                   d.el
@@ -4134,12 +4368,26 @@
                 }
               });
               $("go").textContent = "Đua lại";
+              Sound.stopMusic();
+              Sound.play("end");
               setTimeout(showResult, 500);
             }
           }
           requestAnimationFrame(frame);
         }
 
+        function replay() {
+          raceId++;
+          clearInterval(countIv);
+          countIv = null;
+          $("count").hidden = true;
+          app.querySelectorAll(".reveal").forEach((r) => r.remove());
+          racePaused = false;
+          heldAnims = [];
+          racing = false;
+          Sound.stopAll();
+          start();
+        }
         function setControls(dis) {
           ["go", "shuffle", "sample"].forEach((id) => ($(id).disabled = dis));
           ta.disabled = dis;
@@ -4171,8 +4419,25 @@
           app.classList.add("celebrating");
           $("again").focus();
           confetti();
+          startCongrats();
+        }
+        let resultSnds = [];
+        // all three congrats sounds together, each looping on its own, while the popup is open
+        function startCongrats() {
+          stopCongrats(200);
+          for (const key of ["congrats1", "congrats2", "congrats3"]) {
+            const a = Sound.play(key);
+            if (!a) continue;
+            a.loop = true;
+            resultSnds.push(a);
+          }
+        }
+        function stopCongrats(ms = 500) {
+          resultSnds.forEach((a) => Sound.fadeOut(a, ms));
+          resultSnds = [];
         }
         function hideResult() {
+          stopCongrats();
           $("result").hidden = true;
           app.classList.remove("celebrating");
           stopConfetti = true;
@@ -4580,6 +4845,20 @@
             : "Toàn màn hình";
           applyLayout();
         }
+        const syncSound = () => {
+          const m = Sound.isMuted();
+          $("soundIcon").textContent = m ? "🔇" : "🔊";
+          $("soundBtn").setAttribute(
+            "aria-label",
+            m ? "Bật tiếng" : "Tắt tiếng",
+          );
+          $("soundBtn").setAttribute("aria-pressed", m ? "true" : "false");
+        };
+        syncSound();
+        $("soundBtn").addEventListener("click", () => {
+          Sound.setMuted(!Sound.isMuted());
+          syncSound();
+        });
         $("fsBtn").addEventListener("click", () => {
           if (isFs()) {
             if (app.classList.contains("fs-fake")) {
@@ -4612,6 +4891,7 @@
         });
         /* ---------- wiring ---------- */
         $("go").addEventListener("click", start);
+        $("replay").addEventListener("click", replay);
         // decode the photos and draw the heart/flower sprites while the page is idle, not when they first show up
         setTimeout(() => {
           [
